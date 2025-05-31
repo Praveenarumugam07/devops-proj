@@ -10,7 +10,7 @@ env:
     TASK_DEFINITION_FAMILY: vamsi-task
     CONTAINER_NAME: vamsi-container
     SUBNET_ID: subnet-0063afb8321457f6b
-    SECURITY_GROUP_ID: sg-06d336d9064a67338
+    SECURITY_GROUP_ID: sg-075d199e5a8d68257
     EXECUTION_ROLE_ARN: arn:aws:iam::209561933103:role/ecsTaskExecutionRole
 
 phases:
