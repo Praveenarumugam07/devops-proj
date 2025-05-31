@@ -7,10 +7,10 @@ app = Flask(__name__)
 
 # Microsoft SQL Server configurations (Cloud SQL Public IP: 35.192.101.149)
 DATABASE_CONFIG = {
-    'server': '35.192.101.149',  # Public IP of your Cloud SQL MSSQL instance
+    'server': 'vamsidb.c9uqkcqc8c92.ap-south-1.rds.amazonaws.com',  # Public IP of your Cloud SQL MSSQL instance
     'database': 'test01',  # Change to your database name
-    'username': 'sqlserver',  # MSSQL username
-    'password': 'svamsi123',  # MSSQL password
+    'username': 'admin',  # MSSQL username
+    'password': 'Svamsi79955',  # MSSQL password
     'driver': '{ODBC Driver 17 for SQL Server}'  # Ensure this driver is installed
 }
 
