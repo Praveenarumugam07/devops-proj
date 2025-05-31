@@ -49,7 +49,7 @@ phases:
         cat <<EOF > taskdef.json
         {
           "family": "$TASK_DEFINITION_FAMILY",
-          "networkMode": "project-e",
+          "networkMode": "awsvpc",
           "executionRoleArn": "$EXECUTION_ROLE_ARN",
           "requiresCompatibilities": ["FARGATE"],
           "cpu": "256",
