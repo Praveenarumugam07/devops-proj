@@ -9,8 +9,8 @@ env:
     SERVICE_NAME: vamsi-service
     TASK_DEFINITION_FAMILY: vamsi-task
     CONTAINER_NAME: vamsi-container
-    SUBNET_ID: subnet-0063afb8321457f6b
-    SECURITY_GROUP_ID: sg-075d199e5a8d68257
+    SUBNET_ID: subnet-01475dd681a52e7b0
+    SECURITY_GROUP_ID: sg-06d336d9064a67338
     EXECUTION_ROLE_ARN: arn:aws:iam::209561933103:role/ecsTaskExecutionRole
 
 
@@ -49,7 +49,7 @@ phases:
         cat <<EOF > taskdef.json
         {
           "family": "$TASK_DEFINITION_FAMILY",
-          "networkMode": "awsvpc",
+          "networkMode": "project-e",
           "executionRoleArn": "$EXECUTION_ROLE_ARN",
           "requiresCompatibilities": ["FARGATE"],
           "cpu": "256",
