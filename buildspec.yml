@@ -38,13 +38,12 @@ phases:
       - echo Pushing Docker images...
       - docker push $REPOSITORY_URI:$IMAGE_TAG
       - docker push $REPOSITORY_URI:latest
-
       - echo Writing image definitions file...
       - printf '[{"name":"%s","imageUri":"%s"}]' "$CONTAINER_NAME" "$REPOSITORY_URI:$IMAGE_TAG" > imagedefinitions.json
       - cat imagedefinitions.json
 
-      - echo Registering ECS task definition...
       - |
+        echo Registering ECS task definition...
         cat <<EOF > taskdef.json
         {
           "family": "$TASK_DEFINITION_FAMILY",
@@ -69,11 +68,12 @@ phases:
         }
         EOF
 
-      - TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json file://taskdef.json --region $REGION --query 'taskDefinition.taskDefinitionArn' --output text)
-      - echo Task definition registered: $TASK_DEF_ARN
-
-      - echo Checking if ECS cluster exists...
       - |
+        TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json file://taskdef.json --region $REGION --query 'taskDefinition.taskDefinitionArn' --output text)
+        echo Task definition registered: $TASK_DEF_ARN
+
+      - |
+        echo Checking if ECS cluster exists...
         CLUSTER_STATUS=$(aws ecs describe-clusters --clusters $CLUSTER_NAME --region $REGION --query "clusters[0].status" --output text)
         if [ "$CLUSTER_STATUS" != "ACTIVE" ]; then
           echo "Cluster $CLUSTER_NAME does not exist. Creating cluster..."
@@ -82,8 +82,8 @@ phases:
           echo "Cluster $CLUSTER_NAME already exists. Skipping creation."
         fi
 
-      - echo Checking if ECS service exists...
       - |
+        echo Checking if ECS service exists...
         SERVICE_STATUS=$(aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME --region $REGION --query "services[0].status" --output text)
         if [ "$SERVICE_STATUS" = "ACTIVE" ]; then
           echo "Service $SERVICE_NAME exists. Updating service with new task definition..."
