@@ -13,6 +13,7 @@ env:
     SECURITY_GROUP_ID: sg-075d199e5a8d68257
     EXECUTION_ROLE_ARN: arn:aws:iam::209561933103:role/ecsTaskExecutionRole
 
+
 phases:
   install:
     commands:
