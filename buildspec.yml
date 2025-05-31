@@ -59,7 +59,7 @@ phases:
               "image": "$REPOSITORY_URI:$IMAGE_TAG",
               "portMappings": [
                 {
-                  "containerPort": 80,
+                  "containerPort": 8080,
                   "protocol": "tcp"
                 }
               ],
