@@ -3,7 +3,7 @@ FROM python:3.10-slim-bullseye
 ENV ACCEPT_EULA=Y
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install prerequisites and Microsoft repo keys, then install msodbcsql17
+# Install system dependencies and ODBC drivers
 RUN apt-get update && \
     apt-get install -y curl gnupg2 apt-transport-https software-properties-common && \
     curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - && \
@@ -13,10 +13,15 @@ RUN apt-get update && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-RUN pip install flask mysql-connector-python bcrypt pyodbc
+RUN python -m pip install --upgrade pip && \
+    pip install flask mysql-connector-python bcrypt pyodbc
 
-# Copy app code
+# Optional: verify pyodbc is installed
+RUN python -c "import pyodbc"
+
+# Copy application code
 COPY . /app
 WORKDIR /app
 
+# Run the app
 CMD ["python", "app.py"]
