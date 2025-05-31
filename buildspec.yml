@@ -2,11 +2,11 @@ version: 0.2
 
 env:
   variables:
+    REGION: us-east-1
     CLUSTER_NAME: vamsi-cluster
     SERVICE_NAME: vamsi-service
-    TASK_FAMILY: vamsi-task
+    TASK_DEFINITION_FAMILY: vamsi-task
     CONTAINER_NAME: vamsi-container
-    REGION: us-east-1
 
 phases:
   install:
@@ -34,62 +34,64 @@ phases:
       - echo Pushing Docker images...
       - docker push $REPOSITORY_URI:$IMAGE_TAG
       - docker push $REPOSITORY_URI:latest
+
+      - echo Writing imagedefinitions.json...
+      - printf '[{"name":"%s","imageUri":"%s"}]' "$CONTAINER_NAME" "$REPOSITORY_URI:$IMAGE_TAG" > imagedefinitions.json
+      - cat imagedefinitions.json
+
       - echo Registering ECS task definition...
 
-      # Get subnet ID
-      - SUBNET_ID=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=vamsi-subnet" --region $REGION --query "Subnets[0].SubnetId" --output text)
-      
-      # Get security group ID
-      - SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=vamsi-securitygroup" --region $REGION --query "SecurityGroups[0].GroupId" --output text)
-
-      # Create ECS Cluster (if not exists)
+      # Create task definition JSON file
       - |
-        if ! aws ecs describe-clusters --clusters $CLUSTER_NAME --region $REGION | grep $CLUSTER_NAME; then
-          aws ecs create-cluster --cluster-name $CLUSTER_NAME --region $REGION
-        fi
-
-      # Register task definition
-      - |
-        aws ecs register-task-definition \
-          --family $TASK_FAMILY \
-          --network-mode awsvpc \
-          --cpu "256" \
-          --memory "512" \
-          --requires-compatibilities FARGATE \
-          --execution-role-arn arn:aws:iam::${AWS_ACCOUNT_ID}:role/ecsTaskExecutionRole \
-          --container-definitions "[
+        cat <<EOF > taskdef.json
+        {
+          "family": "$TASK_DEFINITION_FAMILY",
+          "networkMode": "awsvpc",
+          "executionRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/ecsTaskExecutionRole",
+          "requiresCompatibilities": ["FARGATE"],
+          "cpu": "256",
+          "memory": "512",
+          "containerDefinitions": [
             {
-              \"name\": \"$CONTAINER_NAME\",
-              \"image\": \"$REPOSITORY_URI:$IMAGE_TAG\",
-              \"portMappings\": [
+              "name": "$CONTAINER_NAME",
+              "image": "$REPOSITORY_URI:$IMAGE_TAG",
+              "portMappings": [
                 {
-                  \"containerPort\": 8080,
-                  \"hostPort\": 8080,
-                  \"protocol\": \"tcp\"
+                  "containerPort": 80,
+                  "protocol": "tcp"
                 }
               ],
-              \"essential\": true
+              "essential": true
             }
-          ]" \
-          --region $REGION
+          ]
+        }
+        EOF
 
-      # Create or update ECS service
+      # Register task definition
+      - TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json file://taskdef.json --region $REGION --query 'taskDefinition.taskDefinitionArn' --output text)
+
+      - echo Getting Subnet and Security Group...
+      - SUBNET_ID=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=vamsi-subnet" --region $REGION --query "Subnets[0].SubnetId" --output text)
+      - SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=vamsi-securitygroup" --region $REGION --query "SecurityGroups[0].GroupId" --output text)
+
+      # Create ECS Cluster if not exists
+      - aws ecs describe-clusters --clusters $CLUSTER_NAME --region $REGION || aws ecs create-cluster --cluster-name $CLUSTER_NAME --region $REGION
+
+      # Create or update ECS Service
       - |
-        if ! aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME --region $REGION | grep ACTIVE; then
+        SERVICE_EXISTS=$(aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME --region $REGION --query "services[0].status" --output text || echo "MISSING")
+        if [ "$SERVICE_EXISTS" = "ACTIVE" ]; then
+          echo "Updating ECS Service..."
+          aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --task-definition $TASK_DEF_ARN --region $REGION
+        else
+          echo "Creating ECS Service..."
           aws ecs create-service \
             --cluster $CLUSTER_NAME \
             --service-name $SERVICE_NAME \
-            --task-definition $TASK_FAMILY \
+            --task-definition $TASK_DEF_ARN \
             --desired-count 1 \
             --launch-type FARGATE \
             --network-configuration "awsvpcConfiguration={subnets=[$SUBNET_ID],securityGroups=[$SG_ID],assignPublicIp=ENABLED}" \
-            --region $REGION
-        else
-          aws ecs update-service \
-            --cluster $CLUSTER_NAME \
-            --service $SERVICE_NAME \
-            --task-definition $TASK_FAMILY \
-            --desired-count 1 \
             --region $REGION
         fi
 
