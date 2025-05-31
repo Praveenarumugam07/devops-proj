@@ -1,0 +1,14 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      dotnet: 6.0
+  build:
+    commands:
+      - echo "Building app..."
+      - dotnet build MyApp.sln
+      - dotnet publish MyApp.sln -c Release -o out
+artifacts:
+  files:
+    - out/**
