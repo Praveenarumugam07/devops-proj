@@ -4,9 +4,9 @@ FROM python:3.10-slim-bullseye
 ENV ACCEPT_EULA=Y
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install prerequisites
+# Install prerequisites and MS ODBC driver
 RUN apt-get update && \
-    apt-get install -y curl gnupg2 apt-transport-https software-properties-common && \
+    apt-get install -y curl gnupg2 apt-transport-https software-properties-common gcc g++ unixodbc-dev msodbcsql17 && \
     curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - && \
     curl https://packages.microsoft.com/config/debian/11/prod.list > /etc/apt/sources.list.d/mssql-release.list && \
     apt-get update && \
@@ -15,9 +15,9 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-RUN pip install pyodbc
+RUN pip install --no-cache-dir flask mysql-connector-python bcrypt pyodbc
 
-# Copy your application code
+# Copy application code
 COPY . /app
 WORKDIR /app
 
