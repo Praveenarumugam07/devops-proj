@@ -2,7 +2,7 @@ version: 0.2
 
 env:
   variables:
-    REGION: us-east-1
+    REGION: ap-south-1
     AWS_ACCOUNT_ID: 209561933103
     CLUSTER_NAME: vamsi-cluster
     SERVICE_NAME: vamsi-service
