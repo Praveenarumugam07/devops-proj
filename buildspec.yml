@@ -1,5 +1,13 @@
 version: 0.2
 
+env:
+  variables:
+    CLUSTER_NAME: vamsi-cluster
+    SERVICE_NAME: vamsi-service
+    TASK_FAMILY: vamsi-task
+    CONTAINER_NAME: vamsi-container
+    REGION: us-east-1
+
 phases:
   install:
     commands:
@@ -9,7 +17,7 @@ phases:
     commands:
       - echo Logging in to Amazon ECR Public...
       - aws --version
-      - aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/i5n8n4i7
+      - aws ecr-public get-login-password --region $REGION | docker login --username AWS --password-stdin public.ecr.aws/i5n8n4i7
       - REPOSITORY_URI=public.ecr.aws/i5n8n4i7/vamsi-repo
       - IMAGE_TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
       - echo IMAGE_TAG=$IMAGE_TAG
@@ -26,8 +34,64 @@ phases:
       - echo Pushing Docker images...
       - docker push $REPOSITORY_URI:$IMAGE_TAG
       - docker push $REPOSITORY_URI:latest
-      - echo Writing image definitions file...
-      - printf '[{"name":"vamsi-container","imageUri":"%s"}]' $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+      - echo Registering ECS task definition...
+
+      # Get subnet ID
+      - SUBNET_ID=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=vamsi-subnet" --region $REGION --query "Subnets[0].SubnetId" --output text)
+      
+      # Get security group ID
+      - SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=vamsi-securitygroup" --region $REGION --query "SecurityGroups[0].GroupId" --output text)
+
+      # Create ECS Cluster (if not exists)
+      - |
+        if ! aws ecs describe-clusters --clusters $CLUSTER_NAME --region $REGION | grep $CLUSTER_NAME; then
+          aws ecs create-cluster --cluster-name $CLUSTER_NAME --region $REGION
+        fi
+
+      # Register task definition
+      - |
+        aws ecs register-task-definition \
+          --family $TASK_FAMILY \
+          --network-mode awsvpc \
+          --cpu "256" \
+          --memory "512" \
+          --requires-compatibilities FARGATE \
+          --execution-role-arn arn:aws:iam::${AWS_ACCOUNT_ID}:role/ecsTaskExecutionRole \
+          --container-definitions "[
+            {
+              \"name\": \"$CONTAINER_NAME\",
+              \"image\": \"$REPOSITORY_URI:$IMAGE_TAG\",
+              \"portMappings\": [
+                {
+                  \"containerPort\": 8080,
+                  \"hostPort\": 8080,
+                  \"protocol\": \"tcp\"
+                }
+              ],
+              \"essential\": true
+            }
+          ]" \
+          --region $REGION
+
+      # Create or update ECS service
+      - |
+        if ! aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME --region $REGION | grep ACTIVE; then
+          aws ecs create-service \
+            --cluster $CLUSTER_NAME \
+            --service-name $SERVICE_NAME \
+            --task-definition $TASK_FAMILY \
+            --desired-count 1 \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNET_ID],securityGroups=[$SG_ID],assignPublicIp=ENABLED}" \
+            --region $REGION
+        else
+          aws ecs update-service \
+            --cluster $CLUSTER_NAME \
+            --service $SERVICE_NAME \
+            --task-definition $TASK_FAMILY \
+            --desired-count 1 \
+            --region $REGION
+        fi
 
 artifacts:
   files:
