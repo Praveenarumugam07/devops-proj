@@ -1,16 +1,32 @@
-FROM python:3.8-slim
+# Use slim Python base image
+FROM python:3.10-slim
 
-# Expose the app on port 8081
-EXPOSE 8081
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
-# Set working directory
+# Install system dependencies for pyodbc and MSSQL ODBC Driver
+RUN apt-get update && \
+    apt-get install -y gcc g++ curl gnupg2 unixodbc-dev && \
+    curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - && \
+    curl https://packages.microsoft.com/config/debian/11/prod.list > /etc/apt/sources.list.d/mssql-release.list && \
+    apt-get update && \
+    ACCEPT_EULA=Y apt-get install -y msodbcsql17 && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Create working directory
 WORKDIR /app
 
-# Copy files
+# Copy requirement file and install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
 COPY . .
 
-# Install dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Expose the Flask port
+EXPOSE 8080
 
 # Run the application
 CMD ["python", "app.py"]
