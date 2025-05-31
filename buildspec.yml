@@ -8,20 +8,35 @@ env:
     SERVICE_NAME: vamsi-service
     TASK_DEFINITION_FAMILY: vamsi-task
     CONTAINER_NAME: vamsi-container
-    REPOSITORY_URI: public.ecr.aws/i5n8n4i7/vamsi-repo
 
 phases:
+  install:
+    commands:
+      - echo Installing build dependencies...
+
   pre_build:
     commands:
       - echo Logging in to Amazon ECR Public...
       - aws --version
+      - aws ecr-public get-login-password --region $REGION | docker login --username AWS --password-stdin public.ecr.aws/i5n8n4i7
+      - REPOSITORY_URI=public.ecr.aws/i5n8n4i7/vamsi-repo
       - IMAGE_TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
       - echo IMAGE_TAG=$IMAGE_TAG
-      - docker pull $REPOSITORY_URI:$IMAGE_TAG
 
   build:
     commands:
-      - echo Writing imagedefinitions.json...
+      - echo Build started on `date`
+      - docker build -t $REPOSITORY_URI:$IMAGE_TAG .
+      - docker tag $REPOSITORY_URI:$IMAGE_TAG $REPOSITORY_URI:latest
+
+  post_build:
+    commands:
+      - echo Build completed on `date`
+      - echo Pushing Docker images...
+      - docker push $REPOSITORY_URI:$IMAGE_TAG
+      - docker push $REPOSITORY_URI:latest
+
+      - echo Writing image definitions file...
       - printf '[{"name":"%s","imageUri":"%s"}]' "$CONTAINER_NAME" "$REPOSITORY_URI:$IMAGE_TAG" > imagedefinitions.json
       - cat imagedefinitions.json
 
@@ -51,38 +66,21 @@ phases:
         }
         EOF
 
-      - |
-        TASK_DEF_ARN=$(aws ecs register-task-definition \
-          --cli-input-json file://taskdef.json \
-          --region $REGION \
-          --query 'taskDefinition.taskDefinitionArn' \
-          --output text)
+      - TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json file://taskdef.json --region $REGION --query 'taskDefinition.taskDefinitionArn' --output text)
 
       - echo Getting Subnet and Security Group...
       - SUBNET_ID=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=vamsi-subnet" --region $REGION --query "Subnets[0].SubnetId" --output text)
       - SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=vamsi-securitygroup" --region $REGION --query "SecurityGroups[0].GroupId" --output text)
 
-      - echo Creating ECS Cluster if it doesn't exist...
-      - |
-        aws ecs describe-clusters --clusters $CLUSTER_NAME --region $REGION | grep "clusterName" || \
-        aws ecs create-cluster --cluster-name $CLUSTER_NAME --region $REGION
+      - echo Creating ECS cluster if not exists...
+      - aws ecs describe-clusters --clusters $CLUSTER_NAME --region $REGION || aws ecs create-cluster --cluster-name $CLUSTER_NAME --region $REGION
 
-      - echo Updating or creating ECS Service...
+      - echo Checking ECS service...
       - |
-        SERVICE_EXISTS=$(aws ecs describe-services \
-          --cluster $CLUSTER_NAME \
-          --services $SERVICE_NAME \
-          --region $REGION \
-          --query "services[0].status" \
-          --output text || echo "MISSING")
-
+        SERVICE_EXISTS=$(aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME --region $REGION --query "services[0].status" --output text || echo "MISSING")
         if [ "$SERVICE_EXISTS" = "ACTIVE" ]; then
           echo "Updating ECS Service..."
-          aws ecs update-service \
-            --cluster $CLUSTER_NAME \
-            --service $SERVICE_NAME \
-            --task-definition $TASK_DEF_ARN \
-            --region $REGION
+          aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --task-definition $TASK_DEF_ARN --region $REGION
         else
           echo "Creating ECS Service..."
           aws ecs create-service \
