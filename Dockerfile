@@ -1,9 +1,13 @@
 FROM python:3.10-slim-bullseye
 
+LABEL maintainer="praveenkrarumugam@gmail.com"
+LABEL version="1.0"
+LABEL description="Flask app for user management with SQL Server backend"
+
 ENV ACCEPT_EULA=Y
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install system dependencies and ODBC drivers
+# Install system dependencies and Microsoft ODBC drivers
 RUN apt-get update && \
     apt-get install -y curl gnupg2 apt-transport-https software-properties-common && \
     curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - && \
@@ -16,12 +20,12 @@ RUN apt-get update && \
 RUN python -m pip install --upgrade pip && \
     pip install flask mysql-connector-python bcrypt pyodbc
 
-# Optional: verify pyodbc is installed
+# Test pyodbc installation
 RUN python -c "import pyodbc"
 
-# Copy application code
+# Copy code
 COPY . /app
 WORKDIR /app
 
-# Run the app
+# Run the Flask app
 CMD ["python", "app.py"]
